@@ -1,12 +1,14 @@
 import re
 import requests
+import time
 from bs4 import BeautifulSoup
 
 PTT_URL = 'https://www.ptt.cc'
+WEB_REQUEST_TIMEOUT = 5
 
 
 # Get article link and relative information from article list
-def get_article_link(oriText):
+def get_article_info(oriText):
     if oriText.find('a') is None:
         return
 
@@ -26,39 +28,80 @@ def get_article_link(oriText):
     date = oriText.find(class_='date').string
     author = oriText.find(class_='author').string
 
-    result = {'url':url, 'title':title, 'score': score, 'mark':mark, 'date':date, 'author':author}
-    return result;
+    articleInfo = {'url':url, 'title':title, 'score': score, 'mark':mark, 'date':date, 'author':author}
+    return articleInfo;
 
 # Get context from PTT website
 def get_board_context(board, index):
     VERIFY = True
-    timeout = 5
     resp = requests.get(
         url = PTT_URL + '/bbs/' + board + '/index' + str(index) + '.html',
-        cookies={'over18': '1'}, verify=VERIFY, timeout=timeout
+        cookies={'over18': '1'}, verify=VERIFY, timeout=WEB_REQUEST_TIMEOUT
     )
     return resp
 
 
-# To-do: get meta data from article
+# Get meta data from article
 def get_article_meta_data(link):
-    print(link)
-    # Artical URL Example: https://www.ptt.cc/bbs/Baseball/M.1509090486.A.1EB.html
-    #resp = requests.get(
-    #    url = 'https://www.ptt.cc/bbs/Baseball/M.1509090486.A.1EB.html',
-    #    cookies={'over18': '1'}, verify=True, timeout=10
-    #)
-    #print(resp.text)
-    return
+    resp = requests.get(
+        url = link,
+        cookies={'over18': '1'}, verify=True, timeout=WEB_REQUEST_TIMEOUT
+    )
 
+    soup = BeautifulSoup(resp.text, 'html.parser')
+    if soup.title.string == '500 - Internal Server Error':
+        print('Server is too busy, skip it!')
+        exit()
+
+    # Get meta data from artical
+    articleMetaValue = soup.find_all(class_='article-meta-value')
+    timeStamp = time.mktime(time.strptime(articleMetaValue[3].string, "%a %b %d %H:%M:%S %Y"))
+
+    # Get all comment in this article
+    pushList = soup.find_all(class_='push')
+    pushMetaDataList = []
+    for tagIndex in range (0, len(pushList)):
+        pushTag = pushList[tagIndex].find(class_='push-tag').string
+        pushUserId = pushList[tagIndex].find(class_='push-userid').string
+        pushContent = pushList[tagIndex].find(class_='push-content').contents
+        if pushList[tagIndex].find(class_='push-ipdatetime').string.split(' ', 1)[1] is None:
+            continue
+        pushTimeStamp = pushList[tagIndex].find(class_='push-ipdatetime').string.split(' ', 1)[1]
+        pushMetaData = {'tag':pushTag, 'userId':pushTag, 'content':pushContent, 'timeStamp':pushTimeStamp}
+        pushMetaDataList.insert(tagIndex, pushMetaData)
+
+    # Filter tag and get context only
+    dropTag = soup.find_all(class_='push')
+    for tagIndex in range (0, len(dropTag)):
+        dropTag[tagIndex].decompose()
+
+    dropTag = soup.find_all(class_='article-metaline')
+    for tagIndex in range (0, len(dropTag)):
+        dropTag[tagIndex].decompose()
+
+    dropTag = soup.find_all(class_='article-metaline-right')
+    for tagIndex in range (0, len(dropTag)):
+        dropTag[tagIndex].decompose()
+
+    contextHtml = soup.find(id='main-content')
+
+    while (contextHtml.span != None):
+        contextHtml.span.extract()
+
+    while (contextHtml.div != None):
+        contextHtml.div.extract()
+
+    return {'timeStamp':timeStamp, 'context':contextHtml, 'pushMetaData':pushMetaDataList}
+
+# Main function
 if __name__ == '__main__':
     #===================================
     board = 'ToS'
     index = '0'
     #===================================
+
     # Firstly, get first page of article list.
     resp = get_board_context(board, index)
-#    print(resp.text)
 
     # init BeautifulSoup
     soup = BeautifulSoup(resp.text, 'html.parser')
@@ -74,11 +117,9 @@ if __name__ == '__main__':
     buf_str = first_page_url.split('index', 1);
     buf_str = buf_str[1].split('.', 1)
     max_index = int(buf_str[0])
-#    print(max_index)
 
     # Get article url for each page
     for article_list_index in range (max_index - 10, max_index):
-        print(article_list_index)
         resp = get_board_context(board, article_list_index)
         soupForEachContext = BeautifulSoup(resp.text, 'html.parser')
 
@@ -87,8 +128,11 @@ if __name__ == '__main__':
         index = 0
         for boardContext in divs:
             index += 1
-            article_link = get_article_link(boardContext)
-            if not article_link is None:
-                get_article_meta_data(article_link)
+            articleInfo = get_article_info(boardContext)
+            if not articleInfo is None:
+                articleMetaData = get_article_meta_data(articleInfo['url'])
+
+
+
 
 
