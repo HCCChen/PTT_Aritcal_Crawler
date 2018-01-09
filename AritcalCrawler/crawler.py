@@ -1,6 +1,7 @@
 import re
 import requests
 import time
+import pickle
 from bs4 import BeautifulSoup
 
 PTT_URL = 'https://www.ptt.cc'
@@ -93,11 +94,45 @@ def get_article_meta_data(link):
 
     return {'timeStamp':timeStamp, 'context':contextHtml, 'pushMetaData':pushMetaDataList}
 
+# Save meta data to file
+def save_meta_data_to_file(articleMetaData, filename):
+    print(articleMetaData['articleInfo']['url'])
+
+    try:
+        fp = open(filename, 'ab')
+    except FileNotFoundError:
+        print('fp is none')
+        return
+
+    pickle.dump(articleMetaData, fp)
+
+# Load meta data from file
+def get_meta_data_from_file(articleMetaData):
+    try:
+        fp = open(articleMetaData, 'rb')
+    except FileNotFoundError:
+        print('fp is none')
+        return
+
+    metaData = []
+
+    while True:
+        try:
+            checkResult = pickle.load(fp)
+        except EOFError:
+           break 
+
+        metaData.append(checkResult)
+
+    return metaData
+
+
 # Main function
 if __name__ == '__main__':
     #===================================
     board = 'ToS'
     index = '0'
+    metaDataFileName = 'metaData.db'
     #===================================
 
     # Firstly, get first page of article list.
@@ -119,7 +154,8 @@ if __name__ == '__main__':
     max_index = int(buf_str[0])
 
     # Get article url for each page
-    for article_list_index in range (max_index - 10, max_index):
+#    for article_list_index in range (max_index - 10, max_index):
+    for article_list_index in range (max_index - 1, max_index):
         resp = get_board_context(board, article_list_index)
         soupForEachContext = BeautifulSoup(resp.text, 'html.parser')
 
@@ -131,8 +167,7 @@ if __name__ == '__main__':
             articleInfo = get_article_info(boardContext)
             if not articleInfo is None:
                 articleMetaData = get_article_meta_data(articleInfo['url'])
+                articleMetaData['articleInfo'] = articleInfo
+                save_meta_data_to_file(articleMetaData, metaDataFileName)
 
-
-
-
-
+    metaData = get_meta_data_from_file(metaDataFileName)
