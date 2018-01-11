@@ -104,7 +104,7 @@ def get_article_meta_data(link):
     return {'timeStamp':timeStamp, 'context':contextHtml, 'pushMetaData':pushMetaDataList}
 
 # Save meta data to file
-def save_meta_data_to_file(articleMetaData, filename):
+def save_meta_data_to_file(articleMetaData):
     if not os.path.exists("data"):
         os.makedirs("data")
 
@@ -152,18 +152,11 @@ def get_meta_data_from_file(articleMetaData):
     return metaData
 
 
-# Main function
-if __name__ == '__main__':
-    #===================================
-    board = 'ToS'
-    index = '0'
-    metaDataFileName = 'metaData.db'
-    #===================================
-    
+def ptt_crawler(boardName, page):
     articleInfoList = []
 
     # Firstly, get first page of article list.
-    resp = get_board_context(board, index)
+    resp = get_board_context(board, '0')
 
     # init BeautifulSoup
     soup = BeautifulSoup(resp.text, 'html.parser')
@@ -181,8 +174,8 @@ if __name__ == '__main__':
     max_index = int(buf_str[0])
 
     # Get article url for each page
-#    for article_list_index in range (max_index - 10, max_index):
-    for article_list_index in range (max_index - 1, max_index):
+    for article_list_index in range (max_index - page, max_index):
+        print(article_list_index)
         resp = get_board_context(board, article_list_index)
         soupForEachContext = BeautifulSoup(resp.text, 'html.parser')
 
@@ -196,8 +189,14 @@ if __name__ == '__main__':
             if not articleInfo is None:
                 articleMetaData = get_article_meta_data(articleInfo['url'])
                 articleMetaData['articleInfo'] = articleInfo
-                articleInfo['filePath'] = save_meta_data_to_file(articleMetaData, metaDataFileName)
+                articleInfo['filePath'] = save_meta_data_to_file(articleMetaData)
                 articleInfoList.append(articleInfo)
-                # To-Do: Build article table for each board
 
-    metaData = get_meta_data_from_file(articleInfoList[0]['filePath'])
+
+# Main function
+if __name__ == '__main__':
+    #===================================
+    board = 'ToS'
+    page = 1
+    #===================================
+    ptt_crawler(board, page)
