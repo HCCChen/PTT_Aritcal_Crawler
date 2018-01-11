@@ -1,9 +1,12 @@
+import os
 import re
 import requests
 import time
+import sys
 import pickle
 from bs4 import BeautifulSoup
 
+sys.setrecursionlimit(30000)
 PTT_URL = 'https://www.ptt.cc'
 WEB_REQUEST_TIMEOUT = 5
 
@@ -15,6 +18,11 @@ def get_article_info(oriText):
 
     href = oriText.find('a')['href']
     url = PTT_URL + href
+
+    href = href.replace(".", "_")
+    href = href.replace("/", "_")
+    href = href.replace("_bbs_", "")
+    index = href.replace("_html", "")
 
     title = oriText.find('a').string
 
@@ -29,7 +37,7 @@ def get_article_info(oriText):
     date = oriText.find(class_='date').string
     author = oriText.find(class_='author').string
 
-    articleInfo = {'url':url, 'title':title, 'score': score, 'mark':mark, 'date':date, 'author':author}
+    articleInfo = {'index':index, 'url':url, 'title':title, 'score': score, 'mark':mark, 'date':date, 'author':author}
     return articleInfo;
 
 # Get context from PTT website
@@ -65,9 +73,10 @@ def get_article_meta_data(link):
         pushTag = pushList[tagIndex].find(class_='push-tag').string
         pushUserId = pushList[tagIndex].find(class_='push-userid').string
         pushContent = pushList[tagIndex].find(class_='push-content').contents
-        if pushList[tagIndex].find(class_='push-ipdatetime').string.split(' ', 1)[1] is None:
+        try:
+            pushTimeStamp = pushList[tagIndex].find(class_='push-ipdatetime').string.split(' ', 1)[1]
+        except IndexError:
             continue
-        pushTimeStamp = pushList[tagIndex].find(class_='push-ipdatetime').string.split(' ', 1)[1]
         pushMetaData = {'tag':pushTag, 'userId':pushTag, 'content':pushContent, 'timeStamp':pushTimeStamp}
         pushMetaDataList.insert(tagIndex, pushMetaData)
 
@@ -96,15 +105,31 @@ def get_article_meta_data(link):
 
 # Save meta data to file
 def save_meta_data_to_file(articleMetaData, filename):
-    print(articleMetaData['articleInfo']['url'])
+    if not os.path.exists("data"):
+        os.makedirs("data")
+
+    folderName = "data/" + articleMetaData['articleInfo']['index'].split('_', 1)[0]
+    metaDataFilePath = folderName + "/" + articleMetaData['articleInfo']['index'] + ".txt"
+
+    if not os.path.exists(folderName):
+        os.makedirs(folderName)
 
     try:
-        fp = open(filename, 'ab')
+        fp = open(metaDataFilePath, 'wb')
     except FileNotFoundError:
         print('fp is none')
         return
 
-    pickle.dump(articleMetaData, fp)
+    try:
+        pickle.dump(articleMetaData, fp)
+    except RecursionError:
+        print('====================Have RecursionError, dump context=========================')
+        print(articleMetaData)
+        print('==============================================================================')
+        return
+
+    return metaDataFilePath
+
 
 # Load meta data from file
 def get_meta_data_from_file(articleMetaData):
@@ -134,6 +159,8 @@ if __name__ == '__main__':
     index = '0'
     metaDataFileName = 'metaData.db'
     #===================================
+    
+    articleInfoList = []
 
     # Firstly, get first page of article list.
     resp = get_board_context(board, index)
@@ -163,11 +190,14 @@ if __name__ == '__main__':
         divs = soupForEachContext.find_all('div', 'r-ent')
         index = 0
         for boardContext in divs:
+            time.sleep(3)
             index += 1
             articleInfo = get_article_info(boardContext)
             if not articleInfo is None:
                 articleMetaData = get_article_meta_data(articleInfo['url'])
                 articleMetaData['articleInfo'] = articleInfo
-                save_meta_data_to_file(articleMetaData, metaDataFileName)
+                articleInfo['filePath'] = save_meta_data_to_file(articleMetaData, metaDataFileName)
+                articleInfoList.append(articleInfo)
+                # To-Do: Build article table for each board
 
-    metaData = get_meta_data_from_file(metaDataFileName)
+    metaData = get_meta_data_from_file(articleInfoList[0]['filePath'])
