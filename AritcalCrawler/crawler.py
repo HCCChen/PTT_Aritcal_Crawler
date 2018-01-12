@@ -4,6 +4,7 @@ import requests
 import time
 import sys
 import pickle
+import json
 from bs4 import BeautifulSoup
 
 sys.setrecursionlimit(30000)
@@ -72,7 +73,7 @@ def get_article_meta_data(link):
     for tagIndex in range (0, len(pushList)):
         pushTag = pushList[tagIndex].find(class_='push-tag').string
         pushUserId = pushList[tagIndex].find(class_='push-userid').string
-        pushContent = pushList[tagIndex].find(class_='push-content').contents
+        pushContent = pushList[tagIndex].find(class_='push-content').get_text()
         try:
             pushTimeStamp = pushList[tagIndex].find(class_='push-ipdatetime').string.split(' ', 1)[1]
         except IndexError:
@@ -100,11 +101,11 @@ def get_article_meta_data(link):
 
     while (contextHtml.div != None):
         contextHtml.div.extract()
-
-    return {'timeStamp':timeStamp, 'context':contextHtml, 'pushMetaData':pushMetaDataList}
+    
+    return {'timeStamp':timeStamp, 'context':contextHtml.get_text(), 'pushMetaData':pushMetaDataList}
 
 # Save meta data to file
-def save_meta_data_to_file(articleMetaData):
+def save_article_meta_data(articleMetaData):
     if not os.path.exists("data"):
         os.makedirs("data")
 
@@ -115,43 +116,27 @@ def save_meta_data_to_file(articleMetaData):
         os.makedirs(folderName)
 
     try:
-        fp = open(metaDataFilePath, 'wb')
+        fp = open(metaDataFilePath, 'w')
+        fp.write(json.dumps(articleMetaData, ensure_ascii=False))
     except FileNotFoundError:
         print('fp is none')
         return
-
-    try:
-        pickle.dump(articleMetaData, fp)
-    except RecursionError:
-        print('====================Have RecursionError, dump context=========================')
-        print(articleMetaData)
-        print('==============================================================================')
+    except TypeError:
+        print("#### Have Type Error, dump context ####")
+        print(articleMetaData) 
+        print("#######################################")
         return
-
     return metaDataFilePath
 
 
 # Load meta data from file
-def get_meta_data_from_file(articleMetaData):
-    try:
-        fp = open(articleMetaData, 'rb')
-    except FileNotFoundError:
-        print('fp is none')
-        return
-
-    metaData = []
-
-    while True:
-        try:
-            checkResult = pickle.load(fp)
-        except EOFError:
-           break 
-
-        metaData.append(checkResult)
+def load_article_meta_data(articleMetaData):
+    with open(articleMetaData) as json_data:
+        metaData = json.load(json_data)
 
     return metaData
 
-
+# Main function for crawler
 def ptt_crawler(boardName, page):
     articleInfoList = []
 
@@ -189,9 +174,9 @@ def ptt_crawler(boardName, page):
             if not articleInfo is None:
                 articleMetaData = get_article_meta_data(articleInfo['url'])
                 articleMetaData['articleInfo'] = articleInfo
-                articleInfo['filePath'] = save_meta_data_to_file(articleMetaData)
+                articleInfo['filePath'] = save_article_meta_data(articleMetaData)
                 articleInfoList.append(articleInfo)
-
+                print("Processing file: " + articleInfo['title'])
 
 # Main function
 if __name__ == '__main__':
