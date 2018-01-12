@@ -81,6 +81,15 @@ def get_article_meta_data(link):
         pushMetaData = {'tag':pushTag, 'userId':pushTag, 'content':pushContent, 'timeStamp':pushTimeStamp}
         pushMetaDataList.insert(tagIndex, pushMetaData)
 
+
+    # Get Ip Address
+    ipAddr = 0
+    f2List = soup.find_all(class_='f2')
+    for tagIndex in range(0, len(f2List)):
+        if '(ptt.cc)' in f2List[tagIndex].get_text():
+            ipAddr = f2List[tagIndex].get_text().split(": ", 2)[2].rstrip()
+            break;
+
     # Filter tag and get context only
     dropTag = soup.find_all(class_='push')
     for tagIndex in range (0, len(dropTag)):
@@ -102,7 +111,7 @@ def get_article_meta_data(link):
     while (contextHtml.div != None):
         contextHtml.div.extract()
     
-    return {'timeStamp':timeStamp, 'context':contextHtml.get_text(), 'pushMetaData':pushMetaDataList}
+    return {'timeStamp':timeStamp, 'context':contextHtml.get_text(), 'pushMetaData':pushMetaDataList, 'ipAddr':ipAddr}
 
 # Save meta data to file
 def save_article_meta_data(articleMetaData):
@@ -148,7 +157,7 @@ def save_article_index(articleInfoList, boardName):
         os.makedirs(folderName)
 
     with open(indexFilePath, 'w') as outFile:
-        json.dump(articleInfoList, outFile)
+        json.dump(articleInfoList, outFile, ensure_ascii=False)
 
 
 # Load the article index file
@@ -191,7 +200,7 @@ def ptt_crawler(boardName, page):
         divs = soupForEachContext.find_all('div', 'r-ent')
         index = 0
         for boardContext in divs:
-            time.sleep(3)
+            time.sleep(1)
             index += 1
             articleInfo = get_article_info(boardContext)
             if not articleInfo is None:
@@ -202,7 +211,6 @@ def ptt_crawler(boardName, page):
                 print("Processing file: " + articleInfo['title'])
 
     save_article_index(articleInfoList, boardName)
-    #print(json.dumps(load_article_index(boardName), indent=4, sort_keys=True))
 
 # Main function
 if __name__ == '__main__':
@@ -211,3 +219,5 @@ if __name__ == '__main__':
     page = 1
     #===================================
     ptt_crawler(board, page)
+    #get_article_meta_data("https://www.ptt.cc/bbs/ToS/M.1515507630.A.8D3.html")
+    #print(json.dumps(load_article_index(board), indent=4, sort_keys=True, ensure_ascii=False))
