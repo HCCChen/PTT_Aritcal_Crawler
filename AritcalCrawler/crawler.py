@@ -136,6 +136,29 @@ def load_article_meta_data(articleMetaData):
 
     return metaData
 
+# Save the article index file
+def save_article_index(articleInfoList, boardName):
+    if not os.path.exists("data"):
+        os.makedirs("data")
+
+    folderName = "data/" + boardName
+    indexFilePath = folderName + "/" + "index.json"
+
+    if not os.path.exists(folderName):
+        os.makedirs(folderName)
+
+    with open(indexFilePath, 'w') as outFile:
+        json.dump(articleInfoList, outFile)
+
+
+# Load the article index file
+def load_article_index(boardName):
+    indexFilePath = "data/" + boardName + "/index.json"
+    with open(indexFilePath) as json_data:
+        metaData = json.load(json_data)
+
+    return metaData
+
 # Main function for crawler
 def ptt_crawler(boardName, page):
     articleInfoList = []
@@ -177,6 +200,9 @@ def ptt_crawler(boardName, page):
                 articleInfo['filePath'] = save_article_meta_data(articleMetaData)
                 articleInfoList.append(articleInfo)
                 print("Processing file: " + articleInfo['title'])
+
+    save_article_index(articleInfoList, boardName)
+    #print(json.dumps(load_article_index(boardName), indent=4, sort_keys=True))
 
 # Main function
 if __name__ == '__main__':
