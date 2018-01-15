@@ -4,12 +4,10 @@ import re
 import requests
 import time
 import sys
-import pickle
 import json
 import argparse
 from bs4 import BeautifulSoup
 
-sys.setrecursionlimit(30000)
 PTT_URL = 'https://www.ptt.cc'
 WEB_REQUEST_TIMEOUT = 5
 
@@ -55,10 +53,14 @@ def get_board_context(board, index):
 
 # Get meta data from article
 def get_article_meta_data(link):
-    resp = requests.get(
-        url = link,
-        cookies={'over18': '1'}, verify=True, timeout=WEB_REQUEST_TIMEOUT
-    )
+    try:
+        resp = requests.get(
+           url = link,
+            cookies={'over18': '1'}, verify=True, timeout=WEB_REQUEST_TIMEOUT
+        )
+    except Exception as e:
+        print("Exception: ----", e, "----\n skip it and link is: ", link)
+        return None
 
     soup = BeautifulSoup(resp.text, 'html.parser')
     if soup.title.string == '500 - Internal Server Error':
@@ -67,7 +69,14 @@ def get_article_meta_data(link):
 
     # Get meta data from artical
     articleMetaValue = soup.find_all(class_='article-meta-value')
-    timeStamp = time.mktime(time.strptime(articleMetaValue[3].string, "%a %b %d %H:%M:%S %Y"))
+    try:
+        timeStamp = time.mktime(time.strptime(articleMetaValue[3].string, "%a %b %d %H:%M:%S %Y"))
+    except Exception as e:
+        print('[Exception] ', e)
+        print("Get timestamp fail, dump all and skip it")
+        print("Link: ", link)
+        print("Context: ", soup)
+        return None
     st = time.localtime(timeStamp)
     year = time.strftime('%Y', st)
 
@@ -78,26 +87,26 @@ def get_article_meta_data(link):
     pushList = soup.find_all(class_='push')
     pushMetaDataList = []
     for tagIndex in range (0, len(pushList)):
-        pushTag = pushList[tagIndex].find(class_='push-tag').get_text().rsplit()[0]
-        if pushTag == u"推":
-            likeCount += 1
-            pushTag = '+'
-        elif pushTag == u"噓":
-            dislikeCount += 1
-            pushTag = '-'
-        elif pushTag == u"→":
-            neutralCount += 1
-            pushTag = '.'
-
-        pushUserId = pushList[tagIndex].find(class_='push-userid').string
-        pushContent = pushList[tagIndex].find(class_='push-content').get_text()
         try:
+            pushTag = pushList[tagIndex].find(class_='push-tag').get_text().rsplit()[0]
+            if pushTag == u"推":
+                likeCount += 1
+                pushTag = '+'
+            elif pushTag == u"噓":
+                dislikeCount += 1
+                pushTag = '-'
+            elif pushTag == u"→":
+                neutralCount += 1
+                pushTag = '.'
+
+            pushUserId = pushList[tagIndex].find(class_='push-userid').string
+            pushContent = pushList[tagIndex].find(class_='push-content').get_text()
             pushTime = year + ' ' + pushList[tagIndex].find(class_='push-ipdatetime').get_text().strip()
             st = time.strptime(pushTime, '%Y %m/%d %H:%M')
             pushTimeStamp = time.mktime(st)
-        except IndexError:
-            continue
-        except ValueError:
+        except Exception as e:
+            print("Have exception ", e, " during get push info, Skip it and dump original context")
+            print(pushList[tagIndex])
             continue
         pushMetaData = {'tag':pushTag, 'userId':pushUserId, 'content':pushContent, 'timeStamp':pushTimeStamp}
         pushMetaDataList.insert(tagIndex, pushMetaData)
@@ -107,9 +116,16 @@ def get_article_meta_data(link):
     ipAddr = 0
     f2List = soup.find_all(class_='f2')
     for tagIndex in range(0, len(f2List)):
-        if '(ptt.cc)' in f2List[tagIndex].get_text():
-            ipAddr = f2List[tagIndex].get_text().split(": ", 2)[2].rstrip()
-            break;
+        try:
+            if '(ptt.cc)' in f2List[tagIndex].get_text():
+                ipAddr = f2List[tagIndex].get_text().split(": ", 2)[2].rstrip()
+                break;
+        except Exception as e:
+            print('[Exception] ', e)
+            print("Get Ip address fail, skip to get IP address and dump context")
+            print("Link: ", link)
+            print("Context: ", soup)
+            break
 
     # Filter tag and get context only
     dropTag = soup.find_all(class_='push')
@@ -140,7 +156,7 @@ def save_article_meta_data(articleMetaData, boardName):
         os.makedirs("data")
 
     folderName = "data/" + boardName
-    metaDataFilePath = folderName + "/" + articleMetaData['index'] + ".txt"
+    metaDataFilePath = folderName + "/" + articleMetaData['index'] + ".json"
 
     if not os.path.exists(folderName):
         os.makedirs(folderName)
@@ -220,15 +236,20 @@ def ptt_crawler(boardName, page):
         divs = soupForEachContext.find_all('div', 'r-ent')
         index = 0
         for boardContext in divs:
-            time.sleep(1)
+            #time.sleep(1)
             index += 1
             articleInfo = get_article_info(boardContext)
             if not articleInfo is None:
+                print("Processing article: ", articleInfo['title'])
                 articleMetaData = get_article_meta_data(articleInfo['url'])
+                if articleMetaData is None:
+                    print("Have problem during dump article, slow down and skip it")
+                    time.sleep(1)
+                    continue;
                 articleMetaData.update(articleInfo)
                 articleInfo['filePath'] = save_article_meta_data(articleMetaData, boardName)
                 articleInfoList.append(articleInfo)
-                print("Processing file: " + articleInfo['title'])
+                print("Process done.")
 
     save_article_index(articleInfoList, boardName)
 
@@ -246,4 +267,4 @@ if __name__ == '__main__':
         ptt_crawler(args.board, args.page)
         #get_article_meta_data("https://www.ptt.cc/bbs/ToS/M.1515507630.A.8D3.html")
         #print(json.dumps(load_article_index(board), indent=4, sort_keys=True, ensure_ascii=False))
-        print(json.dumps(load_article_meta_data("data/ToS/ToS_M_1515844001_A_D50.txt"), indent=4, sort_keys=True, ensure_ascii=False))
+        #print(json.dumps(load_article_meta_data("data/ToS/ToS_M_1515844001_A_D50.txt"), indent=4, sort_keys=True, ensure_ascii=False))
