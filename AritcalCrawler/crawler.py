@@ -6,6 +6,7 @@ import time
 import sys
 import pickle
 import json
+import argparse
 from bs4 import BeautifulSoup
 
 sys.setrecursionlimit(30000)
@@ -67,6 +68,8 @@ def get_article_meta_data(link):
     # Get meta data from artical
     articleMetaValue = soup.find_all(class_='article-meta-value')
     timeStamp = time.mktime(time.strptime(articleMetaValue[3].string, "%a %b %d %H:%M:%S %Y"))
+    st = time.localtime(timeStamp)
+    year = time.strftime('%Y', st)
 
     # Get all comment in this article
     likeCount = 0
@@ -89,8 +92,12 @@ def get_article_meta_data(link):
         pushUserId = pushList[tagIndex].find(class_='push-userid').string
         pushContent = pushList[tagIndex].find(class_='push-content').get_text()
         try:
-            pushTimeStamp = pushList[tagIndex].find(class_='push-ipdatetime').string.split(' ', 1)[1].rstrip()
+            pushTime = year + ' ' + pushList[tagIndex].find(class_='push-ipdatetime').get_text().strip()
+            st = time.strptime(pushTime, '%Y %m/%d %H:%M')
+            pushTimeStamp = time.mktime(st)
         except IndexError:
+            continue
+        except ValueError:
             continue
         pushMetaData = {'tag':pushTag, 'userId':pushUserId, 'content':pushContent, 'timeStamp':pushTimeStamp}
         pushMetaDataList.insert(tagIndex, pushMetaData)
@@ -128,11 +135,11 @@ def get_article_meta_data(link):
     return {'timeStamp':timeStamp, 'context':contextHtml.get_text(), 'pushMetaData':pushMetaDataList, 'ipAddr':ipAddr, 'countLike':likeCount, 'countDislike':dislikeCount, 'countNeutral':neutralCount}
 
 # Save meta data to file
-def save_article_meta_data(articleMetaData):
+def save_article_meta_data(articleMetaData, boardName):
     if not os.path.exists("data"):
         os.makedirs("data")
 
-    folderName = "data/" + articleMetaData['index'].split('_', 1)[0]
+    folderName = "data/" + boardName
     metaDataFilePath = folderName + "/" + articleMetaData['index'] + ".txt"
 
     if not os.path.exists(folderName):
@@ -187,7 +194,7 @@ def ptt_crawler(boardName, page):
     articleInfoList = []
 
     # Firstly, get first page of article list.
-    resp = get_board_context(board, '0')
+    resp = get_board_context(boardName, '0')
 
     # init BeautifulSoup
     soup = BeautifulSoup(resp.text, 'html.parser')
@@ -206,8 +213,7 @@ def ptt_crawler(boardName, page):
 
     # Get article url for each page
     for article_list_index in range (max_index - page, max_index):
-        print(article_list_index)
-        resp = get_board_context(board, article_list_index)
+        resp = get_board_context(boardName, article_list_index)
         soupForEachContext = BeautifulSoup(resp.text, 'html.parser')
 
         # Get artical from list
@@ -220,7 +226,7 @@ def ptt_crawler(boardName, page):
             if not articleInfo is None:
                 articleMetaData = get_article_meta_data(articleInfo['url'])
                 articleMetaData.update(articleInfo)
-                articleInfo['filePath'] = save_article_meta_data(articleMetaData)
+                articleInfo['filePath'] = save_article_meta_data(articleMetaData, boardName)
                 articleInfoList.append(articleInfo)
                 print("Processing file: " + articleInfo['title'])
 
@@ -228,11 +234,16 @@ def ptt_crawler(boardName, page):
 
 # Main function
 if __name__ == '__main__':
-    #===================================
-    board = 'ToS'
-    page = 1
-    #===================================
-    ptt_crawler(board, page)
-    #get_article_meta_data("https://www.ptt.cc/bbs/ToS/M.1515507630.A.8D3.html")
-    #print(json.dumps(load_article_index(board), indent=4, sort_keys=True, ensure_ascii=False))
-    #print(json.dumps(load_article_meta_data("data/ToS/ToS_M_1515844001_A_D50.txt"), indent=4, sort_keys=True, ensure_ascii=False))
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-b", "--board", help="Give the board name which want to crawler", type=str)
+    parser.add_argument("-p", "--page", help="Give the page which want to crawler", type=int)
+    args = parser.parse_args()
+    if args.board is None:
+        print("Leak argument: board name, STOP it.")
+    elif args.page is None:
+        print("Leak argument: page, STOP it.")
+    else:
+        ptt_crawler(args.board, args.page)
+        #get_article_meta_data("https://www.ptt.cc/bbs/ToS/M.1515507630.A.8D3.html")
+        #print(json.dumps(load_article_index(board), indent=4, sort_keys=True, ensure_ascii=False))
+        print(json.dumps(load_article_meta_data("data/ToS/ToS_M_1515844001_A_D50.txt"), indent=4, sort_keys=True, ensure_ascii=False))
