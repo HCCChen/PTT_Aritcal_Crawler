@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import os
 import re
 import requests
@@ -68,17 +69,30 @@ def get_article_meta_data(link):
     timeStamp = time.mktime(time.strptime(articleMetaValue[3].string, "%a %b %d %H:%M:%S %Y"))
 
     # Get all comment in this article
+    likeCount = 0
+    dislikeCount = 0
+    neutralCount = 0
     pushList = soup.find_all(class_='push')
     pushMetaDataList = []
     for tagIndex in range (0, len(pushList)):
-        pushTag = pushList[tagIndex].find(class_='push-tag').string
+        pushTag = pushList[tagIndex].find(class_='push-tag').get_text().rsplit()[0]
+        if pushTag == u"推":
+            likeCount += 1
+            pushTag = '+'
+        elif pushTag == u"噓":
+            dislikeCount += 1
+            pushTag = '-'
+        elif pushTag == u"→":
+            neutralCount += 1
+            pushTag = '.'
+
         pushUserId = pushList[tagIndex].find(class_='push-userid').string
         pushContent = pushList[tagIndex].find(class_='push-content').get_text()
         try:
-            pushTimeStamp = pushList[tagIndex].find(class_='push-ipdatetime').string.split(' ', 1)[1]
+            pushTimeStamp = pushList[tagIndex].find(class_='push-ipdatetime').string.split(' ', 1)[1].rstrip()
         except IndexError:
             continue
-        pushMetaData = {'tag':pushTag, 'userId':pushTag, 'content':pushContent, 'timeStamp':pushTimeStamp}
+        pushMetaData = {'tag':pushTag, 'userId':pushUserId, 'content':pushContent, 'timeStamp':pushTimeStamp}
         pushMetaDataList.insert(tagIndex, pushMetaData)
 
 
@@ -111,15 +125,15 @@ def get_article_meta_data(link):
     while (contextHtml.div != None):
         contextHtml.div.extract()
     
-    return {'timeStamp':timeStamp, 'context':contextHtml.get_text(), 'pushMetaData':pushMetaDataList, 'ipAddr':ipAddr}
+    return {'timeStamp':timeStamp, 'context':contextHtml.get_text(), 'pushMetaData':pushMetaDataList, 'ipAddr':ipAddr, 'countLike':likeCount, 'countDislike':dislikeCount, 'countNeutral':neutralCount}
 
 # Save meta data to file
 def save_article_meta_data(articleMetaData):
     if not os.path.exists("data"):
         os.makedirs("data")
 
-    folderName = "data/" + articleMetaData['articleInfo']['index'].split('_', 1)[0]
-    metaDataFilePath = folderName + "/" + articleMetaData['articleInfo']['index'] + ".txt"
+    folderName = "data/" + articleMetaData['index'].split('_', 1)[0]
+    metaDataFilePath = folderName + "/" + articleMetaData['index'] + ".txt"
 
     if not os.path.exists(folderName):
         os.makedirs(folderName)
@@ -139,8 +153,8 @@ def save_article_meta_data(articleMetaData):
 
 
 # Load meta data from file
-def load_article_meta_data(articleMetaData):
-    with open(articleMetaData) as json_data:
+def load_article_meta_data(filePath):
+    with open(filePath) as json_data:
         metaData = json.load(json_data)
 
     return metaData
@@ -205,7 +219,7 @@ def ptt_crawler(boardName, page):
             articleInfo = get_article_info(boardContext)
             if not articleInfo is None:
                 articleMetaData = get_article_meta_data(articleInfo['url'])
-                articleMetaData['articleInfo'] = articleInfo
+                articleMetaData.update(articleInfo)
                 articleInfo['filePath'] = save_article_meta_data(articleMetaData)
                 articleInfoList.append(articleInfo)
                 print("Processing file: " + articleInfo['title'])
@@ -221,3 +235,4 @@ if __name__ == '__main__':
     ptt_crawler(board, page)
     #get_article_meta_data("https://www.ptt.cc/bbs/ToS/M.1515507630.A.8D3.html")
     #print(json.dumps(load_article_index(board), indent=4, sort_keys=True, ensure_ascii=False))
+    #print(json.dumps(load_article_meta_data("data/ToS/ToS_M_1515844001_A_D50.txt"), indent=4, sort_keys=True, ensure_ascii=False))
