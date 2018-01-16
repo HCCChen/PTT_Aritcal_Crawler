@@ -16,3 +16,9 @@ optional arguments:
                         Give the board name which want to crawler
   -p PAGE, --page PAGE  Give the page which want to crawler
 ```
+### Output result
+All data will saved at folder "data/BOARD_NAME", it saved as json formate and one file record one article.
+File name is base on board name and article id, EX: Gossiping_M_1515772101_A_B7B.json
+
+There have one index file named "index.json" at the same folder.
+It record all article index in previous work.
