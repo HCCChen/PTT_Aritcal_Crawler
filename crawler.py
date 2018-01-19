@@ -10,6 +10,7 @@ from bs4 import BeautifulSoup
 
 PTT_URL = 'https://www.ptt.cc'
 WEB_REQUEST_TIMEOUT = 5
+MAX_RETRY_COUNT = 5
 
 
 # Get article link and relative information from article list
@@ -43,24 +44,45 @@ def get_article_info(oriText):
 
 # Get context from PTT website
 def get_board_context(board, index):
-    VERIFY = True
-    resp = requests.get(
-        url = PTT_URL + '/bbs/' + board + '/index' + str(index) + '.html',
-        cookies={'over18': '1'}, verify=VERIFY, timeout=WEB_REQUEST_TIMEOUT
-    )
+    resp = None
+    retryCount = 0
+
+    while resp is None:
+        retryCount += 1
+        if retryCount == MAX_RETRY_COUNT:
+            print('Had retry ', MAX_RETRY_COUNT, ' times, skip to get board context')
+            return None
+        try:
+            resp = requests.get(
+                url = PTT_URL + '/bbs/' + board + '/index' + str(index) + '.html',
+                cookies={'over18': '1'}, verify=True, timeout=WEB_REQUEST_TIMEOUT
+            )
+        except Exception as e:
+            print('[Exception] ', e)
+            print('Have exception during get board context, try again')
+
     return resp
 
 
 # Get meta data from article
 def get_article_meta_data(link):
-    try:
-        resp = requests.get(
-           url = link,
-            cookies={'over18': '1'}, verify=True, timeout=WEB_REQUEST_TIMEOUT
-        )
-    except Exception as e:
-        print("Exception: ----", e, "----\n skip it and link is: ", link)
-        return None
+    resp = None
+    retryCount = 0
+
+    while resp is None:
+        retryCount += 1
+        if retryCount == MAX_RETRY_COUNT:
+            print('Had retry ', MAX_RETRY_COUNT, ' times, skip to get board context')
+            return None
+        try:
+            resp = requests.get(
+               url = link,
+                cookies={'over18': '1'}, verify=True, timeout=WEB_REQUEST_TIMEOUT
+            )
+        except Exception as e:
+            print('[Exception] ', e)
+            print("Get article fail from: ", link)
+            return None
 
     soup = BeautifulSoup(resp.text, 'html.parser')
     if soup.title.string == '500 - Internal Server Error':
@@ -105,7 +127,8 @@ def get_article_meta_data(link):
             st = time.strptime(pushTime, '%Y %m/%d %H:%M')
             pushTimeStamp = time.mktime(st)
         except Exception as e:
-            print("Have exception ", e, " during get push info, Skip it and dump original context")
+            print('[Exception] ', e)
+            print("Have exception during get push info, Skip it and dump original context")
             print(pushList[tagIndex])
             continue
         pushMetaData = {'tag':pushTag, 'userId':pushUserId, 'content':pushContent, 'timeStamp':pushTimeStamp}
@@ -211,6 +234,8 @@ def ptt_crawler(boardName, page):
 
     # Firstly, get first page of article list.
     resp = get_board_context(boardName, '0')
+    if resp is None:
+        return
 
     # init BeautifulSoup
     soup = BeautifulSoup(resp.text, 'html.parser')
@@ -230,6 +255,8 @@ def ptt_crawler(boardName, page):
     # Get article url for each page
     for article_list_index in range (max_index - page, max_index):
         resp = get_board_context(boardName, article_list_index)
+        if resp is None:
+            continue;
         soupForEachContext = BeautifulSoup(resp.text, 'html.parser')
 
         # Get artical from list
