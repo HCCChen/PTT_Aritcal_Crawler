@@ -275,8 +275,18 @@ def ptt_crawler(boardName, page):
                     print("Have problem during dump article, slow down and skip it")
                     time.sleep(1)
                     continue;
+
+                # Save meta data into file
                 articleMetaData.update(articleInfo)
                 articleInfo['filePath'] = save_article_meta_data(articleMetaData, boardName)
+
+                # Update article info
+                articleInfo['timeStamp'] = articleMetaData['timeStamp']
+                articleInfo['ipAddr'] = articleMetaData['ipAddr']
+                articleInfo['countDislike'] = articleMetaData['countDislike']
+                articleInfo['countLike'] = articleMetaData['countLike']
+                articleInfo['countNeutral'] = articleMetaData['countNeutral']
+
                 articleInfoList.append(articleInfo)
                 print("Process done.")
 
