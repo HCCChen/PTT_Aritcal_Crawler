@@ -3,6 +3,7 @@ import os
 import re
 import requests
 import time
+import datetime
 import sys
 import json
 import argparse
@@ -175,10 +176,11 @@ def get_article_meta_data(link):
 
 # Save meta data to file
 def save_article_meta_data(articleMetaData, boardName):
+    articleDate = datetime.datetime.fromtimestamp(articleMetaData['timeStamp']).strftime("%Y_%m_%d")
     if not os.path.exists("data"):
         os.makedirs("data")
-
-    folderName = "data/" + boardName
+    
+    folderName = "data/" + boardName + "/" + articleDate
     metaDataFilePath = folderName + "/" + articleMetaData['index'] + ".json"
 
     if not os.path.exists(folderName):
