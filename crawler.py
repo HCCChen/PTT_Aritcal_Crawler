@@ -188,7 +188,7 @@ def save_article_meta_data(articleMetaData, boardName):
 
     try:
         fp = open(metaDataFilePath, 'w')
-        fp.write(json.dumps(articleMetaData, ensure_ascii=False))
+        fp.write(json.dumps(articleMetaData, ensure_ascii=False, indent=4, sort_keys=True))
     except FileNotFoundError:
         print('fp is none')
         return
@@ -219,7 +219,7 @@ def save_article_index(articleInfoList, boardName):
         os.makedirs(folderName)
 
     with open(indexFilePath, 'w') as outFile:
-        json.dump(articleInfoList, outFile, ensure_ascii=False)
+        json.dump(articleInfoList, outFile, ensure_ascii=False, indent=4, sort_keys=True)
 
 
 # Load the article index file
